@@ -8,7 +8,9 @@ import org.codehaus.plexus.util.cli.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -363,12 +365,38 @@ abstract class AbstractScalaTestMojo extends AbstractMojo {
     }
 
     protected Writer getOutputWriter() throws MojoFailureException {
-        return new PrintWriter(System.out) {
+      // detect stdout encoding as much as we can
+      String enc = System.getProperty(
+          "console.encoding"); // usually set in IBM_JAVA_OPTIONS
+      if (enc == null) {
+        enc = System.getProperty("stdout.encoding"); // care since Maven 3.9.9
+        if (enc == null) {
+          enc = System.getProperty(
+              "sun.stdout.encoding"); // care since Maven 3.9.9
+        }
+      }
+
+      if (enc != null) {
+        // set System.out encoding to whatever we detected
+        try {
+          return new PrintWriter(new OutputStreamWriter(System.out, enc)) {
             @Override
             public void close() {
-                out = null; // System.out should stay open
+              out = null; // System.out should stay open
             }
+          };
+        } catch (UnsupportedEncodingException e) {
+          throw new InternalError("Bad console/stdout encoding");
+        }
+      } else {
+        // do it as the original
+        return new PrintWriter(System.out) {
+          @Override
+          public void close() {
+            out = null; // System.out should stay open
+          }
         };
+      }
     }
 
     private String buildClassPathEnvironment() {
